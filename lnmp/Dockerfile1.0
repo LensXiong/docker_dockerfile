@@ -12,6 +12,7 @@ RUN yum -y install gcc gcc-c++ wget make vim lrzsz htop git unzip \
     # 清理 yum 缓存
     && yum clean all
 
+
 # Nginx-image
     # 安装Nginx编译依赖包 
 RUN yum -y install gcc gcc-c++ pcre pcre-devel zlib-devel openssl-devel jemalloc-devel \
@@ -68,7 +69,7 @@ RUN cd /wdata/server/ && wget https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.15
     # 进入下载目录
     && cd /wdata/server/php7/ \
     # 设置PHP源码编译参数
-    && './configure'  '--prefix=/usr/local/php7' '--with-config-file-path=/usr/local/php/etc' '--with-pdo-mysql=mysqlnd' '--with-mysqli=mysqlnd' '--enable-fpm' '--enable-static' '--enable-maintainer-zts' '--enable-inline-optimization' '--enable-sockets' '--enable-wddx' '--enable-zip' '--enable-calendar' '--enable-bcmath' '--enable-soap' '--with-zlib' '--with-iconv' '--with-gd' '--with-xmlrpc' '--enable-mbstring' '--with-curl' '--with-freetype-dir=/usr/local/freetype' '--with-openssl' '--disable-fileinfo' '--with-iconv=/usr/local/libiconv' '--enable-ftp' '--enable-session' '--with-mysql-sock=/tmp/mysql.sock' '--without-pear' '--disable-phar' \
+    && './configure'  '--prefix=/usr/local/php7' '--with-config-file-path=/usr/local/php/etc' '--with-pdo-mysql=mysqlnd' '--with-mysqli=mysqlnd' '--enable-fpm' '--enable-static' '--enable-maintainer-zts' '--enable-inline-optimization' '--enable-sockets' '--enable-wddx' '--enable-zip' '--enable-calendar' '--enable-bcmath' '--enable-soap' '--with-zlib' '--with-iconv' '--with-gd' '--with-xmlrpc' '--enable-mbstring' '--with-curl' '--with-freetype-dir=/usr/local/freetype' '--with-openssl' '--disable-fileinfo' '--with-iconv=/usr/local/libiconv' '--enable-ftp' '--enable-session' '--with-mysql-sock=/tmp/mysql.sock' '--without-pear' '--enable-phar' \
     # 进行编译和安装
     && make && make install \
     # 配置PHP全局环境变量

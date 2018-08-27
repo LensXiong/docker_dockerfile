@@ -1,0 +1,47 @@
+# 制定基础镜像
+FROM wangxiong/php7-composer-laravel:v1.0
+
+# 作者(维护者)
+MAINTAINER wangxiong lensxiong@gmail.com
+
+# ENV 环境变量
+    # 网站运行目录
+ENV WEBSITEDIR=/wdata/www \
+    # 网站应用名称
+    WEBSITENAME=website \
+    # 全局环境变量
+    PROFILE=/etc/profile
+
+# 指定工作目录
+WORKDIR $WEBSITEDIR
+
+# Composer-image (方法一推荐)
+# RUN source $PROFILE && curl -sS https://getcomposer.org/installer | php && mv composer.phar /usr/local/bin/composer
+
+# Composer-image (方法二)
+    # 运行全局环境变量
+RUN source $PROFILE \
+    # 下载安装脚本 － composer-setup.php － 到当前目录
+    && php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    # Verify the installer SHA-384
+    && php -r "if (hash_file('SHA384', 'composer-setup.php') === '544e09ee996cdf60ece3804abc52599c22b1f40f4323403c44d44fdfdd586475ca9813a858088ffbc1f233e9b180f061') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" \
+    # 执行安装过程
+    && php composer-setup.php \
+    # 删除安装脚本
+    && php -r "unlink('composer-setup.php');" \
+    # 设置全局使用composer
+    && mv composer.phar /usr/local/bin/composer
+
+# Laravel-image（使用Laravel安装工具安装）
+   # 运行全局环境变量
+RUN source $PROFILE \
+   # 使用 Composer 下载 Laravel 安装包
+   && composer global require "laravel/installer=~1.1" \
+   # 配置系统中的 laravel 执行文件
+   && echo 'PATH=/root/.composer/vendor/bin/:$PATH' >>/etc/profile \
+   # 运行全局环境变量
+   && source $PROFILE \
+   # 查看Laravel安装工具版本
+   && laravel -v
+
+# docker build -f  /home/composer/Dockerfile -t php7-composer-larave:v1.1 .
