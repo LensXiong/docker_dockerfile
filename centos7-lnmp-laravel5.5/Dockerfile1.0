@@ -1,0 +1,167 @@
+# 制定基础镜像
+FROM centos:centos7
+
+# 作者(维护者)
+MAINTAINER wangxiong lensxiong@gmail.com
+
+# ENV 环境变量
+    # 网站运行目录
+ENV WEBSITEDIR=/wdata/www \
+    # 软件下载目录
+    SERVERDIR=/wdata/server \
+    # 网站应用名称
+    WEBSITENAME=website \
+    # 全局环境变量
+    PROFILE=/etc/profile \    
+  # LARAVEL 配置
+    # LARAVEL 版本
+    LARAVELVERSION=5.5 \
+  # PHP配置
+    # PHP文件夹名称及版本号
+    PHPVERSION=php-7.1.15 \
+    # PHP源码下载包
+    PHPSOURCE=php-7.1.15.tar.gz \
+    # PHP源码下载地址
+    PHPDOWNLOADURL=http://cn2.php.net/get/php-7.1.15.tar.gz/from/this/mirror \
+  # NGINX 配置
+    # NGINX服务器文件夹名称及版本号
+    NGINXVERSION=nginx-1.12.2 \
+    # NGINX源码下载包
+    NGINXSOURCE=nginx-1.12.2.tar.gz \
+    # NGINX源码下载地址
+    NGINXDOWNLOADURL=https://nginx.org/download/nginx-1.12.2.tar.gz
+
+# 指定工作目录
+WORKDIR $WEBSITEDIR
+
+# Linux 工具
+    # 常用工具
+RUN yum -y install gcc gcc-c++ wget make vim lrzsz htop git unzip \
+    # 清理 yum 缓存
+    && yum clean all \
+    # 创建源码下载目录
+    && mkdir $SERVERDIR
+
+# PHP-image
+    # 下载PHP编译安装所依赖的libiconv库
+RUN cd $SERVERDIR && wget https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.15.tar.gz \
+    # 解压libiconv库
+    && tar xvzf libiconv-1.15.tar.gz \
+    # 进入解压文件夹
+    && cd libiconv-1.15 \
+    # 配置、编译、安装libiconv库
+    && ./configure && make && make install \
+    # 删除下载的libiconv库源码
+    && rm -rf $SERVERDIR/libiconv-1.15.tar.gz libiconv-1.15 \
+    # 安装所需的依赖包
+    && yum -y install openssl openssl-devel libxml2-devel curl-devel libpng-devel freetype-devel \
+    # 进入安装目录
+    && cd $SERVERDIR \
+    # 下载 PHP 源码
+    && wget $PHPDOWNLOADURL \
+    # 清理 yum 缓存
+    && yum clean all \
+    # 解压下载包
+    && tar xvzf mirror \
+    # 进入下载目录
+    && cd $SERVERDIR/$PHPVERSION/ \
+    # 设置PHP源码编译参数
+    && './configure'  '--prefix=/usr/local/php7' '--with-config-file-path=/usr/local/php/etc' '--with-pdo-mysql=mysqlnd' '--with-mysqli=mysqlnd' '--enable-fpm' '--enable-static' '--enable-maintainer-zts' '--enable-inline-optimization' '--enable-sockets' '--enable-wddx' '--enable-zip' '--enable-calendar' '--enable-bcmath' '--enable-soap' '--with-zlib' '--with-iconv' '--with-gd' '--with-xmlrpc' '--enable-mbstring' '--with-curl' '--with-freetype-dir=/usr/local/freetype' '--with-openssl' '--disable-fileinfo' '--with-iconv=/usr/local/libiconv' '--enable-ftp' '--enable-session' '--with-mysql-sock=/tmp/mysql.sock' '--without-pear' '--enable-phar' \
+    # 进行编译和安装
+    && make && make install \
+    # 配置PHP全局环境变量
+    && echo 'PATH=/usr/local/php7/bin/:$PATH' >> $PROFILE \
+    # 配置PHP-FPM全局环境变量
+    && echo 'PATH=/usr/local/php7/sbin/:$PATH' >> $PROFILE \
+    # 重新执行环境变量文件
+    && source $PROFILE \
+    # 复制并重新命名php-fpm配置文件
+    && cp /usr/local/php7/etc/php-fpm.conf.default /usr/local/php7/etc/php-fpm.conf \
+    # 复制并重新命名www.conf配置文件
+    && cp /usr/local/php7/etc/php-fpm.d/www.conf.default /usr/local/php7/etc/php-fpm.d/www.conf  \
+    # 启动php-fpm服务
+    && php-fpm \
+    # 删除源码包
+    && rm -rf /wdata/server/*
+
+# Nginx-image
+    # 进入下载目录
+RUN cd $SERVERDIR \
+    # 下载 Nginx 源码
+    && wget $NGINXDOWNLOADURL \
+    # 解压源码包
+    && tar xzf $NGINXSOURCE \
+    # 删除源码包
+    && rm -f $NGINXSOURCE \
+    # 更新 yum 源
+    && yum -y update \
+    # 创建 Nginx 的使用用户 www
+    && useradd www -s /sbin/nologin -M \
+    # 安装Nginx编译依赖包 
+    && yum -y install gcc gcc-c++ pcre pcre-devel zlib-devel openssl-devel jemalloc-devel \
+    # 进入 Nginx 源码下载解压的目录
+    && cd $SERVERDIR/$NGINXVERSION \
+    # 设置编译参数
+    && ./configure --user=www --group=www --prefix=/usr/local/nginx --with-http_stub_status_module --with-http_ssl_module --with-http_v2_module --with-http_gzip_static_module  --with-http_sub_module \
+    # 编译并安装
+    && make && make install \
+    # Nginx 全局环境变量设置
+    && echo 'PATH=/usr/local/nginx/sbin/:$PATH' >> $PROFILE \
+    # 重新执行系统环境变量
+    && source $PROFILE \
+    # 删除安装解压的源码包
+    && rm -rf $SERVERDIR/$NGINXVERSION
+
+# Composer-image (方法一推荐)
+# RUN source $PROFILE && curl -sS https://getcomposer.org/installer | php && mv composer.phar /usr/local/bin/composer
+
+# Composer-image (方法二)
+    # 运行全局环境变量
+RUN source $PROFILE \
+    # 下载安装脚本 － composer-setup.php － 到当前目录
+    && php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    # Verify the installer SHA-384
+    && php -r "if (hash_file('SHA384', 'composer-setup.php') === '544e09ee996cdf60ece3804abc52599c22b1f40f4323403c44d44fdfdd586475ca9813a858088ffbc1f233e9b180f061') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" \
+    # 执行安装过程
+    && php composer-setup.php \
+    # 删除安装脚本
+    && php -r "unlink('composer-setup.php');" \
+    # 设置全局使用composer
+    && mv composer.phar /usr/local/bin/composer
+
+# Laravel-image（使用Laravel安装工具安装）
+   # 运行全局环境变量
+RUN source $PROFILE \
+   # 使用 Composer 下载 Laravel 安装包
+   && composer global require "laravel/installer" \
+   # 配置系统中的 laravel 执行文件
+   && echo 'PATH=/root/.composer/vendor/bin/:$PATH' >>/etc/profile \
+   # 运行全局环境变量
+   && source $PROFILE \
+   # 查看Laravel安装工具版本
+   && laravel -v \
+   # 网站应用目录
+   && cd $WEBSITEDIR && composer create-project --prefer-dist laravel/laravel=$LARAVELVERSION $WEBSITENAME
+
+# 解决每次进入容器命令都要重新source /etc/profile 才能生效的问题
+RUN echo 'source $PROFILE' >> /root/.bashrc \
+    # 删除安装解压的源码包
+    && rm -rf $SERVERDIR/*
+
+  # 构建镜像
+# docker build -f  /home/centos7-lnmp-laravel5.5/Dockerfile -t centos7-lnmp-laravel5.5:v1.0 .
+  # 运行容器
+# docker run -it -d centos7-lnmp-laravel5.5:v1.0 bash
+  # 进入容器
+# docker exec -it container_id bash
+  # 新增镜像标签
+# docker tag centos7-lnmp-laravel5.5:v1.0 wangxiong/centos7-lnmp-laravel5.5:v1.0
+  # 推送镜像
+# docker push wangxiong/centos7-lnmp-laravel5.5:v1.0
+
+# PHP 7.1.15
+# nginx version: nginx/1.12.2
+# Composer version 1.7.2
+# Laravel Installer 2.0.1
+# Laravel Framework 5.5.42
+

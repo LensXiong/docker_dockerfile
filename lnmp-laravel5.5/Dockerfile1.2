@@ -1,0 +1,152 @@
+# 制定基础镜像
+FROM wangxiong/lnmp-laravel5.5:v1.0
+
+# 作者(维护者)
+MAINTAINER wangxiong lensxiong@gmail.com
+
+# ENV 环境变量
+    # 网站运行目录
+ENV WEBSITEDIR=/wdata/www \
+    # 软件下载目录
+    SERVERDIR=/wdata/server \
+    # 网站应用名称
+    WEBSITENAME=website \
+    # 全局环境变量
+    PROFILE=/etc/profile \    
+  # LARAVEL 配置
+    # LARAVEL 版本
+    LARAVELVERSION=5.5 \
+  # NGINX 配置
+    # NGINX服务器文件夹名称及版本号
+    NGINXVERSION=nginx-1.12.2 \
+    # NGINX源码下载包
+    NGINXSOURCE=nginx-1.12.2.tar.gz \
+    # NGINX源码下载地址
+    NGINXDOWNLOADURL=https://nginx.org/download/nginx-1.12.2.tar.gz \
+  # MYSQL 配置
+    # MYSQL文件夹名称及版本号(下载不同版本的只需更改版本即可，对应的包为.tar.gz)
+    MYSQLVERSION=mysql-5.6.40 \
+    # MYSQL源码下载包
+    MYSQLSOURCE=mysql-5.6.40.tar.gz \
+    # MYSQL源码下载地址
+    MYSQLDOWNLOADURL=https://downloads.mysql.com/archives/get/file/mysql-5.6.40.tar.gz
+
+# 指定工作目录
+WORKDIR $WEBSITEDIR
+
+# Linux 工具
+    # 常用工具
+RUN yum -y install gcc gcc-c++ wget make vim lrzsz htop git unzip \
+    # 清理 yum 缓存
+    && yum clean all
+
+# MySQL-image
+    # 源码下载
+RUN cd $SERVERDIR \
+    && wget $MYSQLDOWNLOADURL \
+    # 解压源码包
+    && tar xzf $MYSQLSOURCE \
+    # 删除源码包
+    && rm -f $MYSQLSOURCE \
+    # 更新 yum 源
+    && yum -y update \
+    # 创建 MySQL 的使用用户 mysql
+    && useradd mysql -s /sbin/nologin -M \
+    # 安装 MySQL 编译依赖包 
+    && yum install gcc gcc-c++ ncurses ncurses-devel cmake -y \
+    # 进入 MySQL 源码下载解压的目录
+    && cd $SERVERDIR/$MYSQLVERSION \
+    # 设置编译参数
+    && cmake . -DCMAKE_INSTALL_PREFIX=/usr/local/mysql -DMYSQL_DATADIR=/usr/local/mysql/data -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/wdata/server/$MYSQLVERSION/boost -DSYSCONFDIR=/etc -DWITH_INNOBASE_STORAGE_ENGINE=1 -DWITH_PARTITION_STORAGE_ENGINE=1 -DWITH_FEDERATED_STORAGE_ENGINE=1 -DWITH_BLACKHOLE_STORAGE_ENGINE=1 -DWITH_MYISAM_STORAGE_ENGINE=1 -DENABLED_LOCAL_INFILE=1 -DENABLE_DTRACE=0 -DDEFAULT_CHARSET=utf8mb4 -DDEFAULT_COLLATION=utf8mb4_general_ci -DWITH_EMBEDDED_SERVER=1 \
+    # 编译并安装
+    && make && make install \
+    # 配置全局变量
+    && echo 'PATH=/usr/local/mysql/bin/:$PATH' >> $PROFILE \
+    # 重新执行系统环境变量
+    && source $PROFILE \
+    # 删除安装解压的源码包
+    && rm -rf $SERVERDIR/$MYSQLVERSION 
+
+# Nginx-image
+    # 进入下载目录
+RUN cd $SERVERDIR \
+    # 下载 Nginx 源码
+    && wget $NGINXDOWNLOADURL \
+    # 解压源码包
+    && tar xzf $NGINXSOURCE \
+    # 删除源码包
+    && rm -f $NGINXSOURCE \
+    # 更新 yum 源
+    && yum -y update \
+    # 创建 Nginx 的使用用户 www
+    && useradd www -s /sbin/nologin -M \
+    # 安装Nginx编译依赖包 
+    && yum -y install gcc gcc-c++ pcre pcre-devel zlib-devel openssl-devel jemalloc-devel \
+    # 进入 Nginx 源码下载解压的目录
+    && cd $SERVERDIR/$NGINXVERSION \
+    # 设置编译参数
+    && ./configure --user=www --group=www --prefix=/usr/local/nginx --with-http_stub_status_module --with-http_ssl_module --with-http_v2_module --with-http_gzip_static_module  --with-http_sub_module \
+    # 编译并安装
+    && make && make install \
+    # Nginx 全局环境变量设置
+    && echo 'PATH=/usr/local/nginx/sbin/:$PATH' >> $PROFILE \
+    # 重新执行系统环境变量
+    && source $PROFILE \
+    # 删除安装解压的源码包
+    && rm -rf $SERVERDIR/$NGINXVERSION
+
+# Composer-image (方法一推荐)
+# RUN source $PROFILE && curl -sS https://getcomposer.org/installer | php && mv composer.phar /usr/local/bin/composer
+
+# Composer-image (方法二)
+    # 运行全局环境变量
+RUN source $PROFILE \
+    # 下载安装脚本 － composer-setup.php － 到当前目录
+    && php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    # Verify the installer SHA-384
+    && php -r "if (hash_file('SHA384', 'composer-setup.php') === '544e09ee996cdf60ece3804abc52599c22b1f40f4323403c44d44fdfdd586475ca9813a858088ffbc1f233e9b180f061') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" \
+    # 执行安装过程
+    && php composer-setup.php \
+    # 删除安装脚本
+    && php -r "unlink('composer-setup.php');" \
+    # 设置全局使用composer
+    && mv composer.phar /usr/local/bin/composer
+
+# Laravel-image（使用Laravel安装工具安装）
+   # 运行全局环境变量
+RUN source $PROFILE \
+   # 使用 Composer 下载 Laravel 安装包
+   && composer global require "laravel/installer" \
+   # 配置系统中的 laravel 执行文件
+   && echo 'PATH=/root/.composer/vendor/bin/:$PATH' >>/etc/profile \
+   # 运行全局环境变量
+   && source $PROFILE \
+   # 查看Laravel安装工具版本
+   && laravel -v \
+   # 网站应用目录
+   && cd $WEBSITEDIR && composer create-project --prefer-dist laravel/laravel=$LARAVELVERSION $WEBSITENAME
+
+# 解决每次进入容器命令都要重新source /etc/profile 才能生效的问题
+RUN echo 'source $PROFILE' >> /root/.bashrc \
+    # 删除安装解压的源码包
+    && rm -rf $SERVERDIR/*
+
+  # 构建镜像
+# docker build -f  /home/lnmp-laravel5.5/Dockerfile -t lnmp-laravel5.5:v1.2 .
+  # 运行容器
+# docker run -it -d lnmp-laravel5.5:v1.1 bash
+  # 进入容器
+# docker exec -it container_id bash
+  # 新增镜像标签
+# docker tag lnmp-laravel5.5:v1.1 wangxiong/lnmp-laravel5.5:v1.1
+  # 推送镜像
+# docker push wangxiong/lnmp-laravel5.5:v1.1
+
+# PHP 7.1.15
+# MySQL  Ver 14.14 Distrib 5.6.40
+# nginx version: nginx/1.12.2
+# Composer version 1.7.2
+# Laravel Installer 2.0.1
+# Laravel Framework 5.5.42
+
+
